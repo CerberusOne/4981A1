@@ -16,8 +16,9 @@ void translate(int pipeInputOutput[2], int pipeTranslateOutput[2]);
 void appendChar(char userInput, char* buffer);
 
 int main(){
-	char userInput[1] = "\0";
-	char *input = "";			//buffer used to pass strings to the translate process
+	char userInput;
+	char input[256];			//buffer used to pass strings to the translate process
+	int i = 0;
 
 	int pipeInputOutput[2];			//pipe between Input and Output processes
 	int pipeInputTranslate[2];		//pipe between Input and Translate processes
@@ -100,17 +101,18 @@ int main(){
 
 		while(1){
 
-			userInput[0] = getchar();
-			userInput[1] = '\0';
-			
+			userInput = getchar();
 
 			//get user input
 			//*charInput = getchar();
-			if(*userInput == 'E'){
-				printf("%s",input);
-				//write(pipeInputTranslate[1], input, MSGSIZE);
+			if(userInput == 'E'){
+				//printf("%s",input);
+				write(pipeInputTranslate[1], input, strlen(input));
+				
+				memset(input, 0, strlen(input));
+				i = 0;
 			}
-			if(*userInput == 'J'){
+			if(userInput == 'J'){
 				system("stty raw echo");
 				break;
 			}
@@ -118,16 +120,22 @@ int main(){
 				//input = appendChar(userInput, input);
 				
 				//appendChar(*userInput, input);
-				write(pipeInputOutput[1], userInput, MSGSIZE);
-				appendChar(userInput[0], input);
+				write(pipeInputOutput[1], &userInput, sizeof(char));
+				//appendChar(userInput, input);
+				input[i] = userInput;
+				i++;
+
+				//printf("\nBuffer: %s", input);
 			}
 
-			memset(userInput, 0, strlen(userInput));
-			memset(input, 0, strlen(input));			
+			
+
+			
+			//memset(input, 0, strlen(input));			
 		}
 	}
 
-	system("stty raw echo");
+	system("stty sane");
 	//kill(0) should kill all the processes
 	//^k == 11
 
@@ -178,9 +186,9 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 					}
 				}
 
-			//output(buffer);
-			write(pipeTranslateOutput[1], buffer, MSGSIZE);
-			memset(buffer, 0, strlen(buffer));
+				//output(buffer);
+				write(pipeTranslateOutput[1], buffer, strlen(buffer));
+				memset(buffer, 0, strlen(buffer));
 		}
 	}
 }
