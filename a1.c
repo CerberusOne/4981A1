@@ -228,7 +228,7 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 	int i, j;						//counters keeping track of buffer positions
 
 	//close the read descriptor 
-	close(pipeInputTranslate[1]);	//
+	close(pipeInputTranslate[1]);	
 
 	//close the write descriptor
 	close(pipeTranslateOutput[0]);	
@@ -272,55 +272,79 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 				memset(buffer, 0, strlen(buffer));
 				memset(outputBuffer, 0, strlen(outputBuffer));
 
-				fflush(stdout);	
+				fflush(stdout);	//flushes the stdout after any writes from output
 		}
 	}
 }
 
+/*---------------------------------------------------------------------------------
+--  FUNCTION:      output
+--
+--  DATE:          Jan 21, 2017
+--
+--  DESIGNER:      Aing Ragunathan
+--
+--
+--  INTERFACE:     void output(int pipeInputOutput[2], int pipeTranslateOutput[2])
+--                        
+--
+--  RETURNS:      void
+--
+--  NOTES:
+--		This function is created as a process. It is used to echo characters that the
+--		the user inputs. 
+--		It also prints translated buffers from translate process to stdout.
+-----------------------------------------------------------------------------------*/
 void output(int pipeInputOutput[2], int pipeTranslateOutput[2]){
-	int nread;
-	char buffer[MSGSIZE];
+	int nread;					//used to check if there is ouput from a pipe
+	char buffer[MSGSIZE];		//holds the buffer coming in from translate or output
 
 	//close the read descriptors 
-	close(pipeInputOutput[1]);		
-	close(pipeTranslateOutput[1]);	 
+	close(pipeInputOutput[1]);		//pipe from input to output	
+	close(pipeTranslateOutput[1]);	//pipe from translate to output
 	
 	while(1){
-		fflush(stdout);
+		fflush(stdout);				//flushes the stdout after any writes from output
+		//read from the input pipe
 		switch(nread = read(pipeInputOutput[0], buffer, MSGSIZE)){
 			case -1:
 			case 0:
 				break;
 			default:
+				//echo input back to stdout
 				if(strlen(buffer) > 0){
 					printf("%c", buffer[0]);
 				}
+				//reset buffer
 				memset(buffer, 0, strlen(buffer));
 				break;
 		}
 
-		fflush(stdout);	
+		fflush(stdout);				//flushes the stdout after any writes from output
+		//read from the translate pipe
 		switch(nread = read(pipeTranslateOutput[0], buffer, MSGSIZE)){
 			case -1:
 			case 0:
 				break;
 			default:
+				//check if there if data has been pasted through the buffer
 				if(strlen(buffer) > 0){
 					sleep(1);
 					
 					//new line after the last character was echoed
-					//another new line after printing the translation
+						//another new line after printing the translation
 					printf("\n\r%s\n\r", buffer);
 				}
 				else if(strlen(buffer) == 0){
+					//prints a new line if buffer was empty (from 'K' or 'X')
 					printf("\n\r");
 				}
-
+				//reset the buffer
 				memset(buffer, 0, strlen(buffer));
 				break;
 		}
 
-		fflush(stdout);	
+		fflush(stdout);	//flushes the stdout after any writes from output
 	}
 }
 
