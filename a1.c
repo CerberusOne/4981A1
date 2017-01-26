@@ -6,11 +6,12 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <signal.h>
 
-#define MSGSIZE 16
+#define MSGSIZE 256
 
 void output(int pipeInputOutput[2], int pipeTranslateOutput[2]);
 void translate(int pipeInputOutput[2], int pipeTranslateOutput[2]);
@@ -18,7 +19,7 @@ void appendChar(char userInput, char* buffer);
 
 int main(){
 	char userInput;
-	char input[256];			//buffer used to pass strings to the translate process
+	char input[MSGSIZE] = {0};			//buffer used to pass strings to the translate process
 	int i = 0;
 
 	int pipeInputOutput[2];			//pipe between Input and Output processes
@@ -28,8 +29,7 @@ int main(){
 	pid_t childOutputpid;			//process id for output process
 	pid_t childTranslatepid;		//process id for Translate process
 
-	system("stty raw -echo");
-	
+	system("stty raw -echo");	
 
 	//Validate that all the pipe arrays were created.
 	if(pipe(pipeInputOutput) < 0){
@@ -94,39 +94,40 @@ int main(){
 		close(pipeInputOutput[0]);		
 		close(pipeTranslateOutput[0]);	
 
-
-		//add every keystroke (getch?) to buffer
-		//echo using Output(getch)
-		//if ENTER: translate(buffer), clear buffer
-		//if control-k, exit()	
+		//flush the stdout before starting
 		fflush(stdout);	
 
 		while(1){
-
 			userInput = getchar();
+			fflush(stdout);		//flsuh the stdout after any prints
 
 			switch(userInput){
-				case 'E':
-					write(pipeInputTranslate[1], input, strlen(input));
-					memset(input, 0, strlen(input));
+				case 'E':	
+					write(pipeInputOutput[1], &userInput, sizeof(char));
+					write(pipeInputTranslate[1], input, sizeof(input));
+					memset(input, 0, MSGSIZE);
 					i = 0;
 					break;
-				case 'J':	
-					system("stty raw echo");
-					break;
+				// case 'J':	
+				// 	system("stty raw echo");
+				// 	break;
 				case 11:
-					exit(1);
+					sleep(1);
+					kill(0, SIGINT);
+					return 0;
 				case 'T':
+					write(pipeInputOutput[1], &userInput, sizeof(char));
+					write(pipeInputTranslate[1], input, sizeof(input));
+					sleep(2);
+
 					system("stty sane");
-					kill(childOutputpid, SIGINT);
-					kill(childOutputpid, SIGINT);
-					exit(1);
+					kill(0, SIGINT);
+					return 0;
 				default:
 					write(pipeInputOutput[1], &userInput, sizeof(char));
-					
 					input[i] = userInput;
 					i++;
-			}	
+			}
 
 			fflush(stdout);	
 		}
@@ -136,19 +137,6 @@ int main(){
 }
 
 
-void appendChar(char userInput, char* buffer){
-	//printf("%s", userInput);
-
-
-	int len = sizeof(buffer);
-	char *str = malloc(len +2);
-	strcpy(str, buffer);
-	str[len] = userInput;
-	str[len+1] = '\0';
-
-	buffer = str;
-}
-
 //erase "X"
 //line kill "K"
 
@@ -157,6 +145,7 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 	int nread;
 	char buffer[MSGSIZE];
 	char outputBuffer[MSGSIZE];
+	int i, j;
 
 	//close the read descriptor 
 	close(pipeInputTranslate[1]);		
@@ -165,28 +154,42 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 	close(pipeTranslateOutput[0]);	
 
 	while(1){
+		fflush(stdout);
 		switch(nread = read(pipeInputTranslate[0], buffer, MSGSIZE)){
 			case -1:
 			case 0:
 				break;
 			default:
-
-
-				for(int i = 0; i < strlen(buffer); i++){
+				for(i = 0, j = 0; i < strlen(buffer); i++, j++){
 					switch(buffer[i]){
 						case 'a':
-							outputBuffer[i] = 'z';
+							outputBuffer[j] = 'z';
 							break;	
 						case 'X':
+							j-=2;
+							break;
+						case 'K':
+							memset(outputBuffer, 0, strlen(outputBuffer));
+							outputBuffer[0] = ' ';
+							i = strlen(buffer);		//stop the for loop
+							j = 1;
+							break;
 						default:
-							outputBuffer[i] = buffer[i];
-
+							outputBuffer[j] = buffer[i];
 					}
 				}
 
-				write(pipeTranslateOutput[1], outputBuffer, strlen(buffer));
+				if(j == 0){
+					memset(outputBuffer, 0, strlen(outputBuffer));
+					outputBuffer[0] = ' ';
+					i = strlen(buffer);	//stop the for loop
+					j = 1;
+				}
+				
+				write(pipeTranslateOutput[1], outputBuffer, j);
 				memset(buffer, 0, strlen(buffer));
-				memset(buffer, 0, strlen(outputBuffer));
+				memset(outputBuffer, 0, strlen(outputBuffer));
+
 				fflush(stdout);	
 		}
 	}
@@ -201,6 +204,7 @@ void output(int pipeInputOutput[2], int pipeTranslateOutput[2]){
 	close(pipeTranslateOutput[1]);	 
 	
 	while(1){
+		fflush(stdout);
 		switch(nread = read(pipeInputOutput[0], buffer, MSGSIZE)){
 			case -1:
 			case 0:
@@ -213,15 +217,21 @@ void output(int pipeInputOutput[2], int pipeTranslateOutput[2]){
 				break;
 		}
 
+		fflush(stdout);	
 		switch(nread = read(pipeTranslateOutput[0], buffer, MSGSIZE)){
 			case -1:
 			case 0:
 				break;
 			default:
 				if(strlen(buffer) > 0){
+					sleep(1);
 					
-
+					//new line after the last character was echoed
+					//another new line after printing the translation
 					printf("\n\r%s\n\r", buffer);
+				}
+				else if(strlen(buffer) == 0){
+					printf("\n\r");
 				}
 
 				memset(buffer, 0, strlen(buffer));
