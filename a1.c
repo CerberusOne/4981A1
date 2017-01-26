@@ -150,6 +150,7 @@ int main(){
 		fflush(stdout);	
 
 		while(1){
+			fflush(stdin);
 			userInput = getchar();		//get an input character from the user
 			fflush(stdout);				//flush the stdout after any prints
 
@@ -247,7 +248,12 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 							outputBuffer[j] = 'z';
 							break;	
 						case 'X':		//treat any 'X' characters like backspaces
-							j-=2;
+							if(i == 0){
+								j--;
+							}
+							else{
+								j-=2;
+							}
 							break;
 						case 'K':		//send blank line to output
 							memset(outputBuffer, 0, strlen(outputBuffer));
@@ -267,6 +273,7 @@ void translate(int pipeInputTranslate[2], int pipeTranslateOutput[2]){
 					j = 1;
 				}
 				
+				sleep(1);
 				//send translated buffer to the output process
 				write(pipeTranslateOutput[1], outputBuffer, j);
 				memset(buffer, 0, strlen(buffer));
@@ -328,9 +335,7 @@ void output(int pipeInputOutput[2], int pipeTranslateOutput[2]){
 				break;
 			default:
 				//check if there if data has been pasted through the buffer
-				if(strlen(buffer) > 0){
-					sleep(1);
-					
+				if(strlen(buffer) > 0){					
 					//new line after the last character was echoed
 						//another new line after printing the translation
 					printf("\n\r%s\n\r", buffer);
